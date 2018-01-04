@@ -10,9 +10,11 @@ import Dispatch
 class ReadWriteLock
 {
     private var queue: DispatchQueue
+    private let preconditionKey = DispatchSpecificKey<ObjectIdentifier>()
     
     init(label: String) {
         queue = DispatchQueue(label: label, attributes: .concurrent)
+        queue.setSpecific(key: preconditionKey, value: ObjectIdentifier(self))
     }
     
     func readLocked<T>(execute block: () throws -> T) rethrows -> T {
@@ -24,14 +26,29 @@ class ReadWriteLock
     }
     
     func assertLocked() {
-        dispatchPrecondition(condition: .onQueue(queue))
+        if #available(macOS 10.12, iOS 10.0, tvOS 10.0, watchOS 3.0, *) {
+            dispatchPrecondition(condition: .onQueue(queue))
+        }
+        else {
+            precondition(DispatchQueue.getSpecific(key: preconditionKey) == ObjectIdentifier(self))
+        }
     }
     
     func assertWriteLocked() {
-        dispatchPrecondition(condition: .onQueueAsBarrier(queue))
+        if #available(macOS 10.12, iOS 10.0, tvOS 10.0, watchOS 3.0, *) {
+            dispatchPrecondition(condition: .onQueueAsBarrier(queue))
+        }
+        else {
+            precondition(DispatchQueue.getSpecific(key: preconditionKey) == ObjectIdentifier(self))
+        }
     }
     
     func assertUnlocked() {
-        dispatchPrecondition(condition: .notOnQueue(queue))
+        if #available(macOS 10.12, iOS 10.0, tvOS 10.0, watchOS 3.0, *) {
+            dispatchPrecondition(condition: .notOnQueue(queue))
+        }
+        else {
+            precondition(DispatchQueue.getSpecific(key: preconditionKey) != ObjectIdentifier(self))
+        }
     }
 }
