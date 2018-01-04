@@ -9,16 +9,26 @@ import Foundation
 
 class HuffmanEncoder
 {
-    private var buffer = Data(capacity: 2048)
+    private static let initialBufferCount = 256
+    
+    private var buffer = Data(count: HuffmanEncoder.initialBufferCount)
     private var offset = 0
-    private var remainingBits = 0
+    private var remainingBits = 8
     
     var data: Data {
+        buffer.count = self.count
         return buffer
     }
     
     var count: Int {
-        return offset + (remainingBits == 0 ? 0 : 1)
+        return offset + (remainingBits == 0 || remainingBits == 8 ? 0 : 1)
+    }
+    
+    func reset() {
+        buffer.removeAll(keepingCapacity: true)
+        buffer.append(contentsOf: repeatElement(UInt8(0), count: HuffmanEncoder.initialBufferCount))
+        offset = 0
+        remainingBits = 8
     }
     
     private func encodedLength(of string: String) -> Int {
@@ -37,7 +47,13 @@ class HuffmanEncoder
             appendSym_fast(StaticHuffmanTable[Int(ch)])
         }
         
-        appendSym_fast(StaticHuffmanTable[256]) // EOS symbol
+        //appendSym_fast(StaticHuffmanTable[256]) // EOS symbol
+        if remainingBits > 0 && remainingBits < 8 {
+            // set all remaining bits of the last byte to 1 and advance the offset
+            buffer[offset] |= UInt8(1 << remainingBits) - 1
+            offset += 1
+            remainingBits = (offset == buffer.count ? 0 : 8)
+        }
         
         return self.count - startCount
     }
@@ -51,8 +67,8 @@ class HuffmanEncoder
         // will it fit as-is?
         if sym.nbits == remainingBits {
             buffer[offset] |= UInt8(sym.bits)
-            remainingBits = 0
             offset += 1
+            remainingBits = offset == buffer.count ? 0 : 8
         }
         else if sym.nbits < remainingBits {
             let diff = remainingBits - sym.nbits
@@ -100,6 +116,7 @@ class HuffmanEncoder
             if nbits == 8 {
                 buffer[offset] = UInt8(truncatingIfNeeded: code)
                 offset += 1
+                remainingBits = offset == buffer.count ? 0 : 8
             }
             else {
                 remainingBits = 8 - nbits
@@ -136,7 +153,13 @@ class HuffmanEncoder
             newLength += 128
         }
         
-        buffer.reserveCapacity(newLength)
+        buffer.append(contentsOf: repeatElement(UInt8(0), count: newLength - buffer.count))
+        if remainingBits == 0 {
+            remainingBits = 8
+            if offset != 0 {
+                offset += 1
+            }
+        }
     }
 }
 
@@ -168,7 +191,7 @@ class HuffmanDecoder
                 decoded.append(t.sym)
             }
             
-            t = HuffmanDecoderTable[state][Int(ch) & 0xf]
+            t = HuffmanDecoderTable[Int(t.state)][Int(ch) & 0xf]
             if t.flags.contains(.failure) {
                 throw HuffmanDecoderError.invalidState
             }
@@ -188,5 +211,10 @@ class HuffmanDecoder
         }
         
         return result
+    }
+    
+    func reset() {
+        state = 0
+        acceptable = false
     }
 }

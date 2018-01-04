@@ -7,7 +7,7 @@
 
 import Foundation
 
-internal func encodedLength<T : UnsignedInteger>(of value: T, prefix: Int) -> Int {
+func encodedLength<T : UnsignedInteger>(of value: T, prefix: Int) -> Int {
     precondition(prefix <= 8)
     precondition(prefix >= 0)
     
@@ -27,7 +27,7 @@ internal func encodedLength<T : UnsignedInteger>(of value: T, prefix: Int) -> In
     return len + 1
 }
 
-internal func encodeInteger<T : UnsignedInteger>(_ value: T, to buffer: UnsafeMutableRawPointer,
+func encodeInteger<T : UnsignedInteger>(_ value: T, to buffer: UnsafeMutableRawPointer,
                                                  prefix: Int) -> Int {
     precondition(prefix <= 8)
     precondition(prefix >= 0)
@@ -59,7 +59,7 @@ internal func encodeInteger<T : UnsignedInteger>(_ value: T, to buffer: UnsafeMu
     return start.distance(to: buf)
 }
 
-internal func decodeInteger<T : UnsignedInteger>(from buffer: UnsafeBufferPointer<UInt8>, prefix: Int,
+func decodeInteger<T : UnsignedInteger>(from buffer: UnsafeBufferPointer<UInt8>, prefix: Int,
                                                  initial: T = 0) throws -> (T, Int) {
     precondition(prefix <= 8)
     precondition(prefix >= 0)
@@ -81,11 +81,11 @@ internal func decodeInteger<T : UnsignedInteger>(from buffer: UnsafeBufferPointe
         }
     }
     
-    var m = 0
+    var m: T = 0
     var b: UInt8 = 0
     repeat {
         b = buf.pointee
-        n += T((b & 127) * (1 << m))
+        n += T(b & 127) * (1 << m)
         m += 7
         buf += 1
         
