@@ -127,7 +127,7 @@ class DynamicHeaderTable
         var numRemoved = 0
         
         for entry in table.reversed() {
-            lenReleased = entry.length
+            lenReleased += entry.length
             numRemoved += 1
             
             if (lenReleased >= lengthToRelease) {
@@ -225,5 +225,16 @@ class DynamicHeaderTableWithFastLookup : DynamicHeaderTable
             }
             vidx = nameValueLookup.index(after: vidx)
         } while vidx < nameValueLookup.endIndex
+    }
+}
+
+extension DynamicHeaderTable : CustomStringConvertible
+{
+    var description: String {
+        var result = ""
+        for (index, entry) in table.enumerated() {
+            result += "[\(index+1)] (s = \(entry.length)) \(entry.name): \(entry.value ?? "<none>")\n"
+        }
+        return result
     }
 }

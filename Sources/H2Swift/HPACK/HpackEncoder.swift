@@ -31,7 +31,8 @@ public class HpackEncoder
     public static let defaultDynamicTableSize = DynamicHeaderTable.defaultSize
     private static let defaultDataBufferSize = 128
     
-    private let headerIndexTable: IndexedHeaderTable
+    // internal access for testability
+    let headerIndexTable: IndexedHeaderTable
     
     private var huffmanEncoder = HuffmanEncoder()
     private var data = Data(capacity: HpackEncoder.defaultDataBufferSize)
@@ -69,15 +70,12 @@ public class HpackEncoder
     }
     
     /// Appends headers in the default fashion: indexed if possible, literal+indexable if not.
-    /// - returns: A set containing the indices of each pair that should be inserted into the dynamic table.
-    public func append(headers: [(String, String)]) -> IndexSet {
-        var appendedIndices = IndexSet()
-        for (index, pair) in headers.enumerated() {
-            if append(header: pair.0, value: pair.1) {
-                appendedIndices.insert(index)
+    public func append(headers: [(String, String)]) throws {
+        for (name, value) in headers {
+            if append(header: name, value: value) {
+                try headerIndexTable.append(headerNamed: name, value: value)
             }
         }
-        return appendedIndices
     }
     
     /// Appends a header/value pair, using indexed names/values is possible. If no indexed pair is available,

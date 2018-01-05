@@ -8,13 +8,14 @@
 /// The unified header table used by HTTP/2, encompassing both static and dynamic tables.
 public class IndexedHeaderTable
 {
-    private var dynamicTable: DynamicHeaderTable
+    // internal for testing
+    var dynamicTable: DynamicHeaderTable
     
     init(maxDynamicTableSize: Int = DynamicHeaderTable.defaultSize) {
         self.dynamicTable = DynamicHeaderTable(maximumLength: maxDynamicTableSize)
     }
     
-    public func header(at index: Int) -> (name: String, value: String?)? {
+    public func header(at index: Int) -> (name: String, value: String)? {
         let entry: HeaderTableEntry
         if index < StaticHeaderTable.count {
             entry = StaticHeaderTable[index]    // Static table is already nicely 1-based
@@ -26,7 +27,7 @@ public class IndexedHeaderTable
             return nil
         }
         
-        return (entry.name, entry.value)
+        return (entry.name, entry.value ?? "")
     }
     
     public func firstHeaderMatch(forName name: String, value: String) -> (index: Int, matchesValue: Bool)? {

@@ -10,7 +10,9 @@ import Foundation
 public class HpackDecoder
 {
     public static let maxDynamicTableSize = DynamicHeaderTable.defaultSize
-    private let headerTable: IndexedHeaderTable
+    
+    // internal for testability
+    let headerTable: IndexedHeaderTable
     
     var dynamicTableLength: Int {
         return headerTable.dynamicTableLength
@@ -82,11 +84,11 @@ public class HpackDecoder
         guard let (h, v) = headerTable.header(at: hidx) else {
             throw Error.invalidIndexedHeader(hidx)
         }
-        guard let value = v else {
+        guard !v.isEmpty else {
             throw Error.indexedHeaderWithNoValue(hidx)
         }
         
-        return (h, value)
+        return (h, v)
     }
     
     private func decodeLiteralHeader(from data: Data, startingAt idx: inout Data.Index, headerIndex: Int, addToIndex: Bool = true) throws -> (String, String) {
