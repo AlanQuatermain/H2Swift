@@ -9,6 +9,7 @@ import Foundation
 
 class DynamicHeaderTable
 {
+    public static let defaultSize = 4096
     typealias HeaderTableStore = Array<HeaderTableEntry>
     
     /// The actual table, with items looked up by index.
@@ -37,7 +38,7 @@ class DynamicHeaderTable
         case entryTooLarge(HeaderTableEntry)
     }
     
-    init(maximumLength: Int) {
+    init(maximumLength: Int = DynamicHeaderTable.defaultSize) {
         self.maximumLength = maximumLength
     }
     

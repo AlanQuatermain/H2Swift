@@ -28,13 +28,17 @@ fileprivate func temporaryIntegerBuffer() -> Data {
 /// A class which performs HPACK encoding of a list of headers.
 public class HpackEncoder
 {
-    public static let defaultDynamicHeaderTableSize = 4096
+    public static let defaultDynamicTableSize = DynamicHeaderTable.defaultSize
     private static let defaultDataBufferSize = 128
     
     private let headerIndexTable: IndexedHeaderTable
     
     private var huffmanEncoder = HuffmanEncoder()
     private var data = Data(capacity: HpackEncoder.defaultDataBufferSize)
+    
+    public var encodedData: Data {
+        return data
+    }
     
     public var dynamicTableSize: Int {
         return headerIndexTable.dynamicTableLength
@@ -49,11 +53,11 @@ public class HpackEncoder
         }
     }
     
-    public init(maxDynamicTableSize: Int = HpackEncoder.defaultDynamicHeaderTableSize) {
+    public init(maxDynamicTableSize: Int = HpackEncoder.defaultDynamicTableSize) {
         headerIndexTable = IndexedHeaderTable(maxDynamicTableSize: maxDynamicTableSize)
     }
     
-    /// Resets the internal data buffers and variables, ready to begin encoding a new header block.
+    /// Resets the internal data buffer, ready to begin encoding a new header block.
     public func reset() {
         data.removeAll(keepingCapacity: true)
     }

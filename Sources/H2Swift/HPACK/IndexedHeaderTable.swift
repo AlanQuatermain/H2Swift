@@ -10,7 +10,7 @@ public class IndexedHeaderTable
 {
     private var dynamicTable: DynamicHeaderTable
     
-    init(maxDynamicTableSize: Int) {
+    init(maxDynamicTableSize: Int = DynamicHeaderTable.defaultSize) {
         self.dynamicTable = DynamicHeaderTable(maximumLength: maxDynamicTableSize)
     }
     
