@@ -31,11 +31,12 @@ class HuffmanEncoder
         remainingBits = 8
     }
     
+    // Returns the number of *bits* required to store a given string.
     private func encodedLength(of string: String) -> Int {
         let clen = string.utf8.reduce(0) { $0 + StaticHuffmanTable[Int($1)].nbits }
         
-        // pad for EOS prefix
-        return (clen + 7) / 8
+        // round up to nearest multiple of 8 for EOS prefix
+        return (clen + 7) & ~7
     }
     
     func encode(_ string: String) -> Int {
@@ -120,7 +121,7 @@ class HuffmanEncoder
             }
             else {
                 remainingBits = 8 - nbits
-                buffer[offset] = UInt8(truncatingIfNeeded: code << remainingBits)
+                buffer[offset] = UInt8(truncatingIfNeeded: code)
             }
         }
     }
@@ -174,6 +175,12 @@ class HuffmanDecoder
     private var acceptable = false
     private var state = 0
     
+    func decodeString(from data: Data) throws -> String {
+        return try data.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) -> String in
+            try decodeString(from: ptr, count: data.count)
+        }
+    }
+    
     // Per the nghttp2 implementation, this uses the decoding algorithm & tables described at
     // http://graphics.ics.uci.edu/pub/Prefix.pdf (which is apparently no longer available, sigh).
     func decodeString(from bytes: UnsafeRawPointer, count: Int) throws -> String {
@@ -183,7 +190,7 @@ class HuffmanDecoder
         let input = UnsafeBufferPointer(start: bytes.assumingMemoryBound(to: UInt8.self), count: count)
         
         for ch in input {
-            var t = HuffmanDecoderTable[state][Int(ch) >> 4]
+            var t = HuffmanDecoderTable[state][Int(ch >> 4)]
             if t.flags.contains(.failure) {
                 throw HuffmanDecoderError.invalidState
             }

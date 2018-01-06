@@ -55,32 +55,34 @@ public class HpackDecoder
         switch data[idx] {
         case let x where x & 0x80 == 0x80:
             // purely-indexed header field/value
-            idx = idx.advanced(by: 1)
-            return try decodeIndexedHeader(from: x)
+            let (hidx, nbytes) = try decodeInteger(from: data.subdata(in: idx..<data.endIndex), prefix: 7)
+            idx = idx.advanced(by: nbytes)
+            return try decodeIndexedHeader(from: Int(hidx))
             
         case let x where x & 0xc0 == 0x40:
             // literal header with possibly-indexed name
-            idx = idx.advanced(by: 1)
-            return try decodeLiteralHeader(from: data, startingAt: &idx, headerIndex: Int(x & 0x3f))
+            let (hidx, nbytes) = try decodeInteger(from: data.subdata(in: idx..<data.endIndex), prefix: 6)
+            idx = idx.advanced(by: nbytes)
+            return try decodeLiteralHeader(from: data, startingAt: &idx, headerIndex: Int(hidx))
             
         case let x where x & 0xf0 == 0x00:
             // literal header with possibly-indexed name, not added to dynamic table
-            idx = idx.advanced(by: 1)
-            return try decodeLiteralHeader(from: data, startingAt: &idx, headerIndex: Int(x & 0x0f), addToIndex: false)
+            let (hidx, nbytes) = try decodeInteger(from: data.subdata(in: idx..<data.endIndex), prefix: 4)
+            idx = idx.advanced(by: nbytes)
+            return try decodeLiteralHeader(from: data, startingAt: &idx, headerIndex: Int(hidx), addToIndex: false)
             
         case let x where x & 0xf0 == 0x10:
             // literal header with possibly-indexed name, never added to dynamic table or modified by proxies
-            idx = idx.advanced(by: 1)
-            return try decodeLiteralHeader(from: data, startingAt: &idx, headerIndex: Int(x & 0x0f), addToIndex: false)
+            let (hidx, nbytes) = try decodeInteger(from: data.subdata(in: idx..<data.endIndex), prefix: 4)
+            idx = idx.advanced(by: nbytes)
+            return try decodeLiteralHeader(from: data, startingAt: &idx, headerIndex: Int(hidx), addToIndex: false)
             
         default:
             throw Error.invalidHeaderStartByte(data[idx], idx)
         }
     }
     
-    private func decodeIndexedHeader(from x: UInt8) throws -> (String, String) {
-        let hidx = Int(x & 0x7f)
-        
+    private func decodeIndexedHeader(from hidx: Int) throws -> (String, String) {
         guard let (h, v) = headerTable.header(at: hidx) else {
             throw Error.invalidIndexedHeader(hidx)
         }

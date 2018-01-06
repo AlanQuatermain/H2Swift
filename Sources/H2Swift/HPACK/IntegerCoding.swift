@@ -59,8 +59,15 @@ func encodeInteger<T : UnsignedInteger>(_ value: T, to buffer: UnsafeMutableRawP
     return start.distance(to: buf)
 }
 
-func decodeInteger<T : UnsignedInteger>(from buffer: UnsafeBufferPointer<UInt8>, prefix: Int,
-                                                 initial: T = 0) throws -> (T, Int) {
+func decodeInteger(from data: Data, prefix: Int, initial: UInt = 0) throws -> (UInt, Int) {
+    return try data.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) -> (UInt, Int) in
+        let buf = UnsafeBufferPointer(start: ptr, count: data.count)
+        return try decodeInteger(from: buf, prefix: prefix)
+    }
+}
+
+func decodeInteger(from buffer: UnsafeBufferPointer<UInt8>, prefix: Int,
+                                                 initial: UInt = 0) throws -> (UInt, Int) {
     precondition(prefix <= 8)
     precondition(prefix >= 0)
     
@@ -70,22 +77,22 @@ func decodeInteger<T : UnsignedInteger>(from buffer: UnsafeBufferPointer<UInt8>,
     let end = buf + buffer.count
     
     if n == 0 {
-        if buf.pointee & UInt8(k) != k {       // cheap form of 'if buf.pointee < k'
-            return (T(buf.pointee & UInt8(k)), 1)
+        if buf.pointee & UInt8(k) != k {
+            return (UInt(buf.pointee & UInt8(k)), 1)
         }
         
-        n = T(k)
+        n = UInt(k)
         buf += 1
         if buf == end {
             return (n, buffer.baseAddress!.distance(to: buf))
         }
     }
     
-    var m: T = 0
+    var m: UInt = 0
     var b: UInt8 = 0
     repeat {
         b = buf.pointee
-        n += T(b & 127) * (1 << m)
+        n += UInt(b & 127) * (1 << m)
         m += 7
         buf += 1
         

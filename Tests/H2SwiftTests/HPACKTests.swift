@@ -547,6 +547,194 @@ class HPACKTests: XCTestCase {
         XCTAssertEqualTuple(headers3[2], decoder.headerTable.header(at: 64)!)
     }
     
+    private func byteString(from data: Data, hex: Bool = false) -> String {
+        let result = "" as NSMutableString
+        for byte in data {
+            result.appendFormat(hex ? "%02hhx " : "%02hhu ", byte)
+        }
+        return result as String
+    }
+    
+    private func byteString(from utf8: String.UTF8View, hex: Bool = false) -> String {
+        let result = "" as NSMutableString
+        for byte in utf8 {
+            result.appendFormat(hex ? "%02hhx " : "%02hhu ", byte)
+        }
+        return result as String
+    }
+    
+    func testExerciseHuffmanEncoder() {
+        let encoder = HuffmanEncoder()
+        let decoder = HuffmanDecoder()
+        
+        let text = "鯖審"
+        let encoded = Data(bytes: [0xff, 0xff, 0xaf, 0xff, 0xff, 0x67, 0xff, 0xfe, 0x2f, 0xff, 0xf3, 0xff, 0xff, 0xec, 0xff, 0xff, 0x77])
+//        print("Input length: \(text.count) chars, \(text.utf8.count) utf-8 bytes")
+//        print("Input utf-8 bytes: \(byteString(from: text.utf8))")
+        let amount = encoder.encode(text)
+//        print("Encoded length: \(amount)")
+        XCTAssertEqual(amount, encoded.count)
+        let data = encoder.data
+//        print("Encoded data: \(byteString(from: data))")
+        XCTAssertEqual(data, encoded)
+        
+        let decoded = try! decoder.decodeString(from: encoded)
+//        print("Decoded utf-8 data: \(byteString(from: decoded.utf8))")
+        XCTAssertEqual(decoded, text)
+        
+        encoder.reset()
+        decoder.reset()
+        
+        let text1 = "Hello, world. I am a header value; I have Teh Texts. I am going on for quite a long time because I want to ensure that the encoded data buffer needs to be expanded to test out that code. I'll try some meta-characters too: \r\t\n ought to do it, no?"
+        guard let encoded1 = Data(base64Encoded: "xlooP9KeD2USLqZFB0qDUnKOQtincdFpftTIpOPuVTeWdTeXylC6mRQdKkxzVTKHqUlPYp2tMkqg1KD1TKJNSVSMpB2oKpkU8DqSok6hakW2FUTONKiZyqFqIeQsikg0jUjtllLYpUUsiFEnUjKoXzWOqQsiiTqJKhKh7UqJnGlQh5CrqZP9UUKJs9KIPSVSkqRrEnHYMiS2IUSc9xT////3//+r////xQ9s06VEnUkOoZP0pUf/Pw==") else {
+            XCTFail("Unable to import base-64 result data")
+            return
+        }
+        
+        let amount1 = encoder.encode(text1)
+        XCTAssertEqual(amount1, encoded1.count)
+        let data1 = encoder.data
+//        print("\n\n\(data1.base64EncodedString())\n\n")
+        XCTAssertEqual(data1, encoded1)
+        
+        let decoded1 = data1.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) -> String in
+            guard let result = try? decoder.decodeString(from: UnsafeRawPointer(ptr), count: data1.count) else {
+                XCTFail()
+                return ""
+            }
+            return result
+        }
+        XCTAssertEqual(decoded1, text1)
+
+        // The encoder has a 256-byte encoding buffer to start with, and we want to overflow that to make it expand automatically
+        // We also want to include some > 24-bit codes to test all the conditions.
+        // So: here's a goodly-sized chunk of UTF-8 text. It won't compress worth a damn.
+
+        encoder.reset()
+        decoder.reset()
+
+        let text2 = "午セイ谷高ぐふあト食71入ツエヘナ津県を類及オモ曜一購ごきわ致掲ぎぐず敗文輪へけり鯖審ヘ塊米卸呪おぴ。"
+        guard let encoded2 = Data(base64Encoded: "//8///3v//W//83//P//8n//m//5///c//+r//wf//v//+v///D//8n//m//9L//+z//zf/+l//8P//m//9L//n//83//R//63//1//+3///e6H//z//+p//+j//zf/9H//p//+b//n///V//5v/+j//8n//m//6P//t//+j//9v//6P//5//+z//93//zf/8///r///X//3f//z//+f//7///2///N//z//+9//5v/+j//p//9H//5f//Z//+n//q//5v//q//8X//8P//N//6X//93//m//9L//73//m//5///v///V//9n//9v//o///r//+D//zf/+l///X//5v//S///s//83//pf/+x//6P//w///j//9H//4v//s///V///D//3v//N//6X//V//5v//S///t//83//P//9v//6///2f//i//8///7P//d//83//R//+T//z//93//7f//8///D//4v//P//97//q//8///9v//vf/+b//0v//t//+b//0v//2//+b//m//5/") else {
+            XCTFail("Unable to import base-64 result data")
+            return
+        }
+
+        let amount2 = encoder.encode(text2)
+        XCTAssertEqual(amount2, encoded2.count)
+        let data2 = encoder.data
+        XCTAssertEqual(data2, encoded2)
+
+//        print("\n\n\n\(data2.base64EncodedString())\n\n\n")
+
+        let decoded2 = data2.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) -> String in
+            guard let result = try? decoder.decodeString(from: UnsafeRawPointer(ptr), count: data2.count) else {
+                XCTFail()
+                return ""
+            }
+            return result
+        }
+        XCTAssertEqual(decoded2, text2)
+    }
+    
+    func testNonIndexedRequest() {
+        let request1 = Data(bytes: [0x82, 0x86, 0x84, 0x01, 0x8c, 0xf1, 0xe3, 0xc2, 0xe5, 0xf2, 0x3a, 0x6b, 0xa0, 0xab, 0x90, 0xf4, 0xff])
+        let request2 = Data(bytes: [0x82, 0x86, 0x84, 0x01, 0x8c, 0xf1, 0xe3, 0xc2, 0xe5, 0xf2, 0x3a, 0x6b, 0xa0, 0xab, 0x90, 0xf4, 0xff, 0x0f, 0x09, 0x86, 0xa8, 0xeb, 0x10, 0x64, 0x9c, 0xbf, 0x00, 0x88, 0x25, 0xa8, 0x49, 0xe9, 0x5b, 0xa9, 0x7d, 0x7f, 0x89, 0x25, 0xa8, 0x49, 0xe9, 0x5b, 0xb8, 0xe8, 0xb4, 0xbf])
+        let request3 = Data(bytes: [0x82, 0x87, 0x85, 0x11, 0x8c, 0xf1, 0xe3, 0xc2, 0xe5, 0xf2, 0x3a, 0x6b, 0xa0, 0xab, 0x90, 0xf4, 0xff, 0x10, 0x88, 0x25, 0xa8, 0x49, 0xe9, 0x5b, 0xa9, 0x7d, 0x7f, 0x89, 0x25, 0xa8, 0x49, 0xe9, 0x5b, 0xb8, 0xe8, 0xb4, 0xbf])
+        
+        let headers1 = [
+            (":method", "GET"),
+            (":scheme", "http"),
+            (":path", "/")
+        ]
+        let h1NoIndex = (name: ":authority", value: "www.example.com")
+        let h2NoIndex = (name: "cache-control", value: "no-cache")
+        
+        let headers3 = [
+            (":method", "GET"),
+            (":scheme", "https"),
+            (":path", "/index.html")
+        ]
+        let h3NeverIndex = (name: "custom-key", value: "custom-value")
+        
+        let encoder = HpackEncoder()
+        XCTAssertNoThrow(try encoder.append(headers: headers1))
+        encoder.appendNonIndexed(header: h1NoIndex.name, value: h1NoIndex.value)
+        XCTAssertEqual(encoder.encodedData, request1)
+        XCTAssertEqual(encoder.headerIndexTable.dynamicTableLength, 0)
+        
+        encoder.reset()
+        XCTAssertNoThrow(try encoder.append(headers: headers1))
+        encoder.appendNonIndexed(header: h1NoIndex.name, value: h1NoIndex.value)
+        encoder.appendNonIndexed(header: h2NoIndex.name, value: h2NoIndex.value)
+        encoder.appendNonIndexed(header: h3NeverIndex.name, value: h3NeverIndex.value)
+        XCTAssertEqual(encoder.encodedData, request2)
+        print("enc2: \(byteString(from: encoder.encodedData, hex: true))")
+        print("exp2: \(byteString(from: request2, hex: true))")
+        XCTAssertEqual(encoder.headerIndexTable.dynamicTableLength, 0)
+        
+        encoder.reset()
+        XCTAssertNoThrow(try encoder.append(headers: headers3))
+        encoder.appendNeverIndexed(header: h1NoIndex.name, value: h1NoIndex.value)
+        encoder.appendNeverIndexed(header: h3NeverIndex.name, value: h3NeverIndex.value)
+        XCTAssertEqual(encoder.encodedData, request3)
+        XCTAssertEqual(encoder.headerIndexTable.dynamicTableLength, 0)
+        
+        let decoder = HpackDecoder()
+        XCTAssertEqual(decoder.dynamicTableLength, 0)
+        
+        let fullHeaders1 = [
+            (":method", "GET"),
+            (":scheme", "http"),
+            (":path", "/"),
+            (":authority", "www.example.com")
+        ]
+        let fullHeaders2 = [
+            (":method", "GET"),
+            (":scheme", "http"),
+            (":path", "/"),
+            (":authority", "www.example.com"),
+            ("cache-control", "no-cache"),
+            ("custom-key", "custom-value")
+        ]
+        let fullHeaders3 = [
+            (":method", "GET"),
+            (":scheme", "https"),
+            (":path", "/index.html"),
+            (":authority", "www.example.com"),
+            ("custom-key", "custom-value")
+        ]
+        
+        guard let decoded1 = try? decoder.decodeHeaders(from: request1) else {
+            XCTFail("Error decoding first set of headers.")
+            return
+        }
+        XCTAssertEqual(decoded1.count, fullHeaders1.count)
+        for i in decoded1.indices {
+            XCTAssertEqualTuple(decoded1[i], fullHeaders1[i])
+        }
+        XCTAssertEqual(decoder.dynamicTableLength, 0)
+        
+        guard let decoded2 = try? decoder.decodeHeaders(from: request2) else {
+            XCTFail("Error decoding first set of headers.")
+            return
+        }
+        XCTAssertEqual(decoded2.count, fullHeaders2.count)
+        for i in decoded2.indices {
+            XCTAssertEqualTuple(decoded2[i], fullHeaders2[i])
+        }
+        XCTAssertEqual(decoder.dynamicTableLength, 0)
+        
+        guard let decoded3 = try? decoder.decodeHeaders(from: request3) else {
+            XCTFail("Error decoding first set of headers.")
+            return
+        }
+        XCTAssertEqual(decoded3.count, fullHeaders3.count)
+        for i in decoded3.indices {
+            XCTAssertEqualTuple(decoded3[i], fullHeaders3[i])
+        }
+        XCTAssertEqual(decoder.dynamicTableLength, 0)
+    }
+    
     static let allTests = [
         (testIntegerEncoding, "testIntegerEncoding"),
         (testIntegerDecoding, "testIntegerDecoding"),
@@ -557,6 +745,7 @@ class HPACKTests: XCTestCase {
         (testRequestHeadersWithHuffmanCoding, "testRequestHeadersWithHuffmanCoding"),
         (testResponseHeadersWithoutHuffmanCoding, "testResponseHeadersWithoutHuffmanCoding"),
         (testResponseHeadersWithHuffmanCoding, "testResponseHeadersWithHuffmanCoding"),
+        (testExerciseHuffmanEncoder, "testExerciseHuffmanEncoder"),
     ]
 
 }
