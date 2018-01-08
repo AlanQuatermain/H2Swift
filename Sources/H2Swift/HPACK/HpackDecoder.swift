@@ -45,13 +45,15 @@ public class HpackDecoder
         var idx = data.startIndex
         
         while idx < data.endIndex {
-            result.append(try decodeHeader(from: data, startingAt: &idx))
+            if let pair = try decodeHeader(from: data, startingAt: &idx) {
+                result.append(pair)
+            }
         }
         
         return result
     }
     
-    private func decodeHeader(from data: Data, startingAt idx: inout Data.Index) throws -> (String, String) {
+    private func decodeHeader(from data: Data, startingAt idx: inout Data.Index) throws -> (String, String)? {
         switch data[idx] {
         case let x where x & 0x80 == 0x80:
             // purely-indexed header field/value
@@ -76,6 +78,13 @@ public class HpackDecoder
             let (hidx, nbytes) = try decodeInteger(from: data.subdata(in: idx..<data.endIndex), prefix: 4)
             idx = idx.advanced(by: nbytes)
             return try decodeLiteralHeader(from: data, startingAt: &idx, headerIndex: Int(hidx), addToIndex: false)
+            
+        case let x where x & 0xe0 == 0x20:
+            // dynamic header table size update
+            let (size, nbytes) = try decodeInteger(from: data.subdata(in: idx..<data.endIndex), prefix: 5)
+            idx = idx.advanced(by: nbytes)
+            maxDynamicTableLength = Int(size)
+            return nil
             
         default:
             throw Error.invalidHeaderStartByte(data[idx], idx)

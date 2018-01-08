@@ -563,7 +563,7 @@ class HPACKTests: XCTestCase {
         return result as String
     }
     
-    func testExerciseHuffmanEncoder() {
+    func testComplexHuffmanEncoding() {
         let encoder = HuffmanEncoder()
         let decoder = HuffmanDecoder()
         
@@ -735,6 +735,54 @@ class HPACKTests: XCTestCase {
         XCTAssertEqual(decoder.dynamicTableLength, 0)
     }
     
+    func testInlineDynamicTableResize() {
+        let request1 = Data(bytes: [0x82, 0x86, 0x84, 0x3F, 0x32, 0x41, 0x8c, 0xf1, 0xe3, 0xc2, 0xe5, 0xf2, 0x3a, 0x6b, 0xa0, 0xab, 0x90, 0xf4, 0xff])
+        
+        let headers1 = [
+            (":method", "GET"),
+            (":scheme", "http"),
+            (":path", "/"),
+            (":authority", "www.example.com")
+        ]
+        
+        let oddMaxTableSize = 81
+        
+        let encoder = HpackEncoder()
+        XCTAssertNotEqual(encoder.maxDynamicTableSize, oddMaxTableSize)
+        
+        // adding these all manually to ensure our table insert happens
+        XCTAssertFalse(encoder.append(header: ":method", value: "GET"))
+        XCTAssertFalse(encoder.append(header: ":scheme", value: "http"))
+        XCTAssertFalse(encoder.append(header: ":path", value: "/"))
+        encoder.setMaxDynamicTableSize(oddMaxTableSize)
+        XCTAssertTrue(encoder.append(header: ":authority", value: "www.example.com"))
+        // now we have to manually add the header to the table, though:
+        XCTAssertNoThrow(try encoder.updateDynamicTable(for: [headers1[3]]))
+        
+        XCTAssertEqual(encoder.encodedData, request1)
+        XCTAssertEqual(encoder.dynamicTableSize, 57)
+        XCTAssertEqual(encoder.maxDynamicTableSize, oddMaxTableSize)
+        XCTAssertEqualTuple(headers1[3], encoder.headerIndexTable.header(at: 62)!)
+        
+        let decoder = HpackDecoder(maxDynamicTableSize: 22)     // not enough to store the value we expect it to eventually store
+        let decoded: [(String, String)]
+        do {
+            decoded = try decoder.decodeHeaders(from: request1)
+        }
+        catch {
+            XCTFail("Failed to decode header set containing dynamic-table-resize command: \(error)")
+            return
+        }
+        
+        XCTAssertEqual(decoded.count, headers1.count)
+        for (a, b) in zip(headers1, decoded) {
+            XCTAssertEqualTuple(a, b)
+        }
+        
+        XCTAssertEqual(decoder.maxDynamicTableLength, oddMaxTableSize)
+        XCTAssertEqualTuple(headers1[3], decoder.headerTable.header(at: 62)!)
+    }
+    
     static let allTests = [
         (testIntegerEncoding, "testIntegerEncoding"),
         (testIntegerDecoding, "testIntegerDecoding"),
@@ -745,7 +793,7 @@ class HPACKTests: XCTestCase {
         (testRequestHeadersWithHuffmanCoding, "testRequestHeadersWithHuffmanCoding"),
         (testResponseHeadersWithoutHuffmanCoding, "testResponseHeadersWithoutHuffmanCoding"),
         (testResponseHeadersWithHuffmanCoding, "testResponseHeadersWithHuffmanCoding"),
-        (testExerciseHuffmanEncoder, "testExerciseHuffmanEncoder"),
+        (testComplexHuffmanEncoding, "testComplexHuffmanEncoding"),
     ]
 
 }

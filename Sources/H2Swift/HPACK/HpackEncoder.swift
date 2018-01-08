@@ -54,6 +54,27 @@ public class HpackEncoder
         }
     }
     
+    /// Sets the maximum size for the dynamic table and optionally encodes the new value
+    /// into the current packed header block to send to the peer.
+    ///
+    /// - Parameter size: The new maximum size for the dynamic header table.
+    /// - Parameter sendUpdate: If `true`, sends the new maximum table size to the peer
+    ///                         by encoding the value inline with the current header set.
+    ///                         Default = `true`.
+    public func setMaxDynamicTableSize(_ size: Int, andSendUpdate sendUpdate: Bool = true) {
+        maxDynamicTableSize = size
+        guard sendUpdate else { return }
+        
+        let len = encodedLength(of: UInt(size), prefix: 5)
+        var bytes = Array(repeating: UInt8(0), count: len)
+        bytes[0] = 0b00100000
+        bytes.withUnsafeMutableBytes {
+            _ = encodeInteger(UInt(size), to: $0.baseAddress!, prefix: 5)
+        }
+        
+        data.append(contentsOf: bytes)
+    }
+    
     public init(maxDynamicTableSize: Int = HpackEncoder.defaultDynamicTableSize) {
         headerIndexTable = IndexedHeaderTable(maxDynamicTableSize: maxDynamicTableSize)
     }

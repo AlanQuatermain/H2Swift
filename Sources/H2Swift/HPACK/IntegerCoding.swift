@@ -27,6 +27,7 @@ func encodedLength<T : UnsignedInteger>(of value: T, prefix: Int) -> Int {
     return len + 1
 }
 
+@discardableResult
 func encodeInteger<T : UnsignedInteger>(_ value: T, to buffer: UnsafeMutableRawPointer,
                                                  prefix: Int) -> Int {
     precondition(prefix <= 8)
