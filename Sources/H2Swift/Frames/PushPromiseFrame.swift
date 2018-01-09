@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct PushPromiseFrame : Frame
+public struct PushPromiseFrame : Frame, Flaggable
 {
     public var payloadLength: Int {
         if padding != 0 {
@@ -63,11 +63,7 @@ public struct PushPromiseFrame : Frame
     }
     
     public mutating func setFlags(_ flags: FrameFlags) throws {
-        guard type.validateFlags(flags) else {
-            throw ProtocolError.internalError
-        }
-        
-        // can't set padded flag directly
+        try type.validateFlags(flags)
         self.flags.formUnion(flags.subtracting(.padded))
     }
     
@@ -94,7 +90,7 @@ public struct PushPromiseFrame : Frame
             data.append(UInt8(padding))
         }
         
-        writeNetworkLong(UInt32(promisedStreamId & ~0x80000000), to: &data, at: data.endIndex)
+        writeNetworkLong(UInt32(promisedStreamId & ~0x80000000), toData: &data, at: data.endIndex)
         data.append(headerData)
         
         if flags.contains(.padded) {

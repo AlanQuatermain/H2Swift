@@ -54,7 +54,7 @@ func readFrameLength(from data: Data, at offset: Data.Index = 0) -> Int {
     }
 }
 
-func writeNetworkShort(_ value: UInt16, to data: inout Data, at offset: Data.Index = 0) {
+func writeNetworkShort(_ value: UInt16, toData data: inout Data, at offset: Data.Index = 0) {
     if data.count < offset + 2 {
         data.count = offset + 2
     }
@@ -63,7 +63,7 @@ func writeNetworkShort(_ value: UInt16, to data: inout Data, at offset: Data.Ind
     }
 }
 
-func writeNetworkLong(_ value: UInt32, to data: inout Data, at offset: Data.Index = 0) {
+func writeNetworkLong(_ value: UInt32, toData data: inout Data, at offset: Data.Index = 0) {
     if data.count < offset + 4 {
         data.count = offset + 4
     }
@@ -72,7 +72,7 @@ func writeNetworkLong(_ value: UInt32, to data: inout Data, at offset: Data.Inde
     }
 }
 
-func writeFrameLength(_ value: Int, to data: inout Data, at offset: Data.Index = 0) {
+func writeFrameLength(_ value: Int, toData data: inout Data, at offset: Data.Index = 0) {
     if data.count < offset + 3 {
         data.count = offset + 3
     }

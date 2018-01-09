@@ -14,7 +14,7 @@ public struct PriorityFrame : Frame
     }
     
     public let type: FrameType = .priority
-    public private(set) var flags: FrameFlags = []
+    public let flags: FrameFlags = []
     public var streamIdentifier: Int = 0
     
     public var streamDependency: Int
@@ -31,7 +31,6 @@ public struct PriorityFrame : Frame
     public init(payload data: Data, payloadLength: Int, flags: FrameFlags, streamIdentifier: Int) throws {
         precondition(payloadLength >= 5, "PRIORITY frame payload should be (at least) five bytes in size")
         
-        self.flags = flags.intersection(type.allowedFlags)
         self.streamIdentifier = streamIdentifier
         
         self.isExclusive = data[0] & 0x80 == 0x80
@@ -42,12 +41,13 @@ public struct PriorityFrame : Frame
     public func encodeFrame() -> Data {
         var data = buildFrameHeader()
         
-        writeNetworkLong(UInt32(streamDependency), to: &data)
+        let idx = data.endIndex
+        writeNetworkLong(UInt32(streamDependency), toData: &data, at: idx)
         if isExclusive {
-            data[0] |= 0x80
+            data[idx] |= 0x80
         }
         else {
-            data[0] &= ~0x80
+            data[idx] &= ~0x80
         }
         
         data.append(UInt8(weight - 1))

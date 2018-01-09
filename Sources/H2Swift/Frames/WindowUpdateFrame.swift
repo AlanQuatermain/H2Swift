@@ -39,7 +39,7 @@ public struct WindowUpdateFrame : Frame
     
     public func encodeFrame() -> Data {
         var data = buildFrameHeader()
-        writeNetworkLong(UInt32(windowSizeIncrement & ~0x80000000), to: &data, at: data.endIndex)
+        writeNetworkLong(UInt32(windowSizeIncrement & ~0x80000000), toData: &data, at: data.endIndex)
         return data
     }
 }

@@ -7,6 +7,11 @@
 
 import Foundation
 
+public enum FrameError : Error
+{
+    case invalidFlags(FrameFlags)
+}
+
 public enum FrameType : UInt8
 {
     case data               // 0
@@ -45,8 +50,10 @@ public enum FrameType : UInt8
         }
     }
     
-    func validateFlags(_ flags: FrameFlags) -> Bool {
-        return flags.isSubset(of: allowedFlags)
+    func validateFlags(_ flags: FrameFlags) throws {
+        guard flags.isSubset(of: allowedFlags) else {
+            throw FrameError.invalidFlags(flags.subtracting(allowedFlags))
+        }
     }
 }
 
@@ -155,6 +162,9 @@ public struct FrameFlags : OptionSet
     public static let endHeaders    = FrameFlags(rawValue: 0x04)
     public static let padded        = FrameFlags(rawValue: 0x08)
     public static let priority      = FrameFlags(rawValue: 0x20)
+    
+    // for unit tests
+    static let allFlags: FrameFlags = [.endStream, .endHeaders, .padded, .priority]
 }
 
 public protocol Frame
@@ -168,6 +178,11 @@ public protocol Frame
     init(payload data: Data, payloadLength: Int, flags: FrameFlags, streamIdentifier: Int) throws
 }
 
+public protocol Flaggable
+{
+    mutating func setFlags(_ flags: FrameFlags) throws
+}
+
 extension Frame
 {
     /// Returns a data blob allocated to the right capacity to hold the entire frame,
@@ -179,41 +194,69 @@ extension Frame
         bytes.reserveCapacity(9 + payloadLen)
         
         // three-byte length
-        writeFrameLength(payloadLen, to: &bytes)
+        writeFrameLength(payloadLen, toData: &bytes)
         // one-byte type
         bytes[3] = type.rawValue
         // one-byte flags
         bytes[4] = flags.rawValue
         // four-byte stream identifier, masking out topmost bit
-        writeNetworkLong(UInt32(streamIdentifier & ~0x80000000), to: &bytes, at: 5)
+        writeNetworkLong(UInt32(streamIdentifier & ~0x80000000), toData: &bytes, at: bytes.startIndex.advanced(by: 5))
         
         return bytes
     }
+}
+
+func decodeFrameHeader(from data: Data) throws -> (payloadLen: Int, type: FrameType, flags: FrameFlags, stream: Int) {
+    guard data.count >= 9 else {
+        throw ProtocolError.frameSizeError
+    }
     
-    func decodeFrameHeader(from data: Data) throws -> (payloadLen: Int, type: FrameType, flags: FrameFlags, stream: Int) {
-        guard data.count >= 9 else {
-            throw ProtocolError.frameSizeError
-        }
-        
-        // three-byte length
-        let payloadLen = readFrameLength(from: data)
-        guard payloadLen + 3 <= data.count else {
-            throw ProtocolError.frameSizeError
-        }
-        
-        // one-byte type
-        guard let type = FrameType(rawValue: data[3]) else {
-            throw ProtocolError.noError
-        }
-        
-        // one-byte flags
-        // Sender MUST NOT send invalid flags, but receiver MUST ignore any invalid flags (§ 4.1)
-        // Therefore, we don't
-        let flags = FrameFlags(rawValue: data[4])
-        
-        // we MUST ignore the topmost bit of the stream identifier when receiving-- it's a reserved flag bit.
-        let stream = readNetworkLong(from: data, at: 5) & ~0x80000000
-        
-        return (payloadLen, type, flags, Int(stream))
+    // three-byte length
+    let payloadLen = readFrameLength(from: data)
+    guard payloadLen + 3 <= data.count else {
+        throw ProtocolError.frameSizeError
+    }
+    
+    // one-byte type
+    guard let type = FrameType(rawValue: data[3]) else {
+        throw ProtocolError.noError
+    }
+    
+    // one-byte flags
+    // Sender MUST NOT send invalid flags, but receiver MUST ignore any invalid flags (§ 4.1)
+    // Therefore, we don't
+    let flags = FrameFlags(rawValue: data[4])
+    
+    // we MUST ignore the topmost bit of the stream identifier when receiving-- it's a reserved flag bit.
+    let stream = readNetworkLong(from: data, at: data.startIndex.advanced(by: 5)) & ~0x80000000
+    
+    return (payloadLen, type, flags, Int(stream))
+}
+
+func decodeFrame(from data: Data) throws -> Frame {
+    let (payloadLen, type, flags, stream) = try decodeFrameHeader(from: data)
+    let payload = data.subdata(in: 9 ..< 9 + payloadLen)
+    
+    switch type {
+    case .data:
+        return try DataFrame(payload: payload, payloadLength: payloadLen, flags: flags, streamIdentifier: stream)
+    case .headers:
+        return try HeadersFrame(payload: payload, payloadLength: payloadLen, flags: flags, streamIdentifier: stream)
+    case .priority:
+        return try PriorityFrame(payload: payload, payloadLength: payloadLen, flags: flags, streamIdentifier: stream)
+    case .resetStream:
+        return try ResetStreamFrame(payload: payload, payloadLength: payloadLen, flags: flags, streamIdentifier: stream)
+    case .settings:
+        return try SettingsFrame(payload: payload, payloadLength: payloadLen, flags: flags, streamIdentifier: stream)
+    case .pushPromise:
+        return try PushPromiseFrame(payload: payload, payloadLength: payloadLen, flags: flags, streamIdentifier: stream)
+    case .ping:
+        return try PingFrame(payload: payload, payloadLength: payloadLen, flags: flags, streamIdentifier: stream)
+    case .goAway:
+        return try GoAwayFrame(payload: payload, payloadLength: payloadLen, flags: flags, streamIdentifier: stream)
+    case .windowUpdate:
+        return try WindowUpdateFrame(payload: payload, payloadLength: payloadLen, flags: flags, streamIdentifier: stream)
+    case .continuation:
+        return try ContinuationFrame(payload: payload, payloadLength: payloadLen, flags: flags, streamIdentifier: stream)
     }
 }

@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct DataFrame : Frame
+public struct DataFrame : Frame, Flaggable
 {
     public var payloadLength: Int {
         if flags.contains(.padded) {
@@ -43,7 +43,8 @@ public struct DataFrame : Frame
         }
         
         let lenPlusPadLen = unpaddedLength + 1
-        return (lenPlusPadLen + 4) & ~0b11
+        let result = ((lenPlusPadLen + 4) & ~0b11) - lenPlusPadLen
+        return result
     }
     
     public mutating func setSuggestedPadding() {
@@ -74,9 +75,7 @@ public struct DataFrame : Frame
     }
     
     public mutating func setFlags(_ flags: FrameFlags) throws {
-        guard type.validateFlags(flags) else {
-            throw ProtocolError.internalError
-        }
+        try type.validateFlags(flags)
         
         // we don't set the padded bit from outside-- we need a number to go with it.
         self.flags.formUnion(flags.subtracting(.padded))

@@ -3,4 +3,5 @@ import XCTest
 
 XCTMain([
     testCase(HPACKTests.allTests),
+    testCase(FrameTests.allTests)
 ])

@@ -37,7 +37,7 @@ public struct ResetStreamFrame : Frame
     
     public func encodeFrame() -> Data {
         var data = buildFrameHeader()
-        writeNetworkLong(errorCode, to: &data, at: data.endIndex)
+        writeNetworkLong(errorCode, toData: &data, at: data.endIndex)
         return data
     }
     

@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct HeadersFrame : Frame
+struct HeadersFrame : Frame, Flaggable
 {
     public var payloadLength: Int {
         switch flags {
@@ -67,7 +67,7 @@ struct HeadersFrame : Frame
         
         // add the padding byte and round up to the next multiple of four
         let lenPlusPadLen = unpaddedLength + 1
-        return (lenPlusPadLen + 4) & ~0b11
+        return ((lenPlusPadLen + 4) & ~0b11) - lenPlusPadLen
     }
     
     public mutating func setSuggestedPadding() {
@@ -104,10 +104,7 @@ struct HeadersFrame : Frame
     }
     
     public mutating func setFlags(_ flags: FrameFlags) throws {
-        guard type.validateFlags(flags) else {
-            throw ProtocolError.internalError
-        }
-        
+        try type.validateFlags(flags)
         self.flags.formUnion(flags.subtracting(.padded))
     }
     
@@ -120,9 +117,9 @@ struct HeadersFrame : Frame
         
         if flags.contains(.priority) {
             // grab the current index...
-            let idx = result.count
+            let idx = result.endIndex
             // ...encode the dependency value there...
-            writeNetworkLong(UInt32(streamDependency), to: &result, at: idx)
+            writeNetworkLong(UInt32(streamDependency), toData: &result, at: idx)
             // ...and toggle the topmost bit appropriately.
             if isExclusive {
                 result[idx] |= 0x80

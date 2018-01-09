@@ -7,14 +7,14 @@
 
 import Foundation
 
-public struct PingFrame : Frame
+public struct PingFrame : Frame, Flaggable
 {
     public var payloadLength: Int {
         return 8
     }
     
     public let type: FrameType = .ping
-    public let flags: FrameFlags
+    public private(set) var flags: FrameFlags
     public let streamIdentifier: Int = 0
     
     public let payload: Data
@@ -36,6 +36,11 @@ public struct PingFrame : Frame
         
         self.flags = flags.intersection(type.allowedFlags)
         self.payload = data
+    }
+    
+    public mutating func setFlags(_ flags: FrameFlags) throws {
+        try type.validateFlags(flags)
+        self.flags.formUnion(flags)
     }
     
     public func encodeFrame() -> Data {

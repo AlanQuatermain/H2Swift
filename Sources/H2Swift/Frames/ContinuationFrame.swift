@@ -7,14 +7,14 @@
 
 import Foundation
 
-public struct ContinuationFrame : Frame
+public struct ContinuationFrame : Frame, Flaggable
 {
     public var payloadLength: Int {
         return headerData.count
     }
     
     public let type: FrameType = .continuation
-    public let flags: FrameFlags
+    public private(set) var flags: FrameFlags
     public let streamIdentifier: Int
     
     public let headerData: Data
@@ -29,6 +29,11 @@ public struct ContinuationFrame : Frame
         self.flags = flags.intersection(type.allowedFlags)
         self.streamIdentifier = streamIdentifier
         self.headerData = data
+    }
+    
+    public mutating func setFlags(_ flags: FrameFlags) throws {
+        try type.validateFlags(flags)
+        self.flags.formUnion(flags)
     }
     
     public func encodeFrame() -> Data {

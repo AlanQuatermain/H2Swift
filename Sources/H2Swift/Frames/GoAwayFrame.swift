@@ -53,8 +53,8 @@ public struct GoAwayFrame : Frame
     
     public func encodeFrame() -> Data {
         var data = buildFrameHeader()
-        writeNetworkLong(UInt32(lastStreamID & ~0x80000000), to: &data, at: data.endIndex)
-        writeNetworkLong(errorCode, to: &data, at: data.endIndex)
+        writeNetworkLong(UInt32(lastStreamID & ~0x80000000), toData: &data, at: data.endIndex)
+        writeNetworkLong(errorCode, toData: &data, at: data.endIndex)
         
         if let debugData = debugData {
             data.append(debugData)

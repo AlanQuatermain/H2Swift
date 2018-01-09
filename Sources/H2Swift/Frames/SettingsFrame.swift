@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct SettingsFrame : Frame
+public struct SettingsFrame : Frame, Flaggable
 {
     public var payloadLength: Int {
         if flags.contains(.ack) {
@@ -19,10 +19,25 @@ public struct SettingsFrame : Frame
     }
     
     public var type: FrameType = .settings
-    public var flags: FrameFlags = []
+    public private(set) var flags: FrameFlags = []
     public let streamIdentifier: Int = 0
     
-    public var settings: [SettingsParameters] = []
+    public mutating func setFlags(_ flags: FrameFlags) throws {
+        try type.validateFlags(flags)
+        self.flags.formUnion(flags)
+    }
+    
+    public private(set) var settings: [SettingsParameters] = []
+    
+    /// Creates a `SETTINGS` frame to send the specified values.
+    public init(sendingSettings settings: [SettingsParameters]) {
+        self.settings = settings
+    }
+    
+    // Creates an acknowledgement frame.
+    public init() {
+        self.flags = .ack
+    }
     
     public init(payload data: Data, payloadLength: Int, flags: FrameFlags, streamIdentifier: Int) throws {
         if flags.contains(.ack) {
