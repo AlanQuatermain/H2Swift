@@ -61,12 +61,20 @@ public struct DataFrame : Frame, Flaggable
     }
     
     public init(payload data: Data, payloadLength: Int, flags: FrameFlags, streamIdentifier: Int) throws {
+        guard streamIdentifier != 0 else {
+            throw ProtocolError.protocolError
+        }
+        
         self.flags = flags.intersection(type.allowedFlags)
         self.streamIdentifier = streamIdentifier
         
         if flags.contains(.padded) {
             // read padding length
             padding = Int(data[0])
+            if padding > payloadLength - 1 {
+                throw ProtocolError.protocolError
+            }
+            
             self.data = data.subdata(in: 1 ..< data.endIndex.advanced(by: -padding))
         }
         else {

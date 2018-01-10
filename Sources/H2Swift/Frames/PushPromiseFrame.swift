@@ -45,6 +45,13 @@ public struct PushPromiseFrame : Frame, Flaggable
     }
     
     public init(payload data: Data, payloadLength: Int, flags: FrameFlags, streamIdentifier: Int) throws {
+        guard payloadLength >= 4 else {
+            throw ProtocolError.frameSizeError
+        }
+        guard streamIdentifier != 0 else {
+            throw ProtocolError.protocolError
+        }
+        
         self.flags = flags.intersection(type.allowedFlags)
         self.streamIdentifier = streamIdentifier
         
@@ -52,11 +59,20 @@ public struct PushPromiseFrame : Frame, Flaggable
         if flags.contains(.padded) {
             self.padding = Int(data[idx])
             idx += 1
+            
+            guard padding < payloadLength - 1 else {
+                throw ProtocolError.frameSizeError
+            }
         }
         
         // remember to clear the reserved bit
-        self.promisedStreamId = Int(readNetworkLong(from: data, at: idx)) & ~0x80000000
+        let promisedStreamId = Int(readNetworkLong(from: data, at: idx)) & ~0x80000000
         idx += 4
+        guard promisedStreamId > streamIdentifier && promisedStreamId != 0 else {
+            throw ProtocolError.protocolError
+        }
+        
+        self.promisedStreamId = promisedStreamId
         
         // read the rest of the data
         self.headerData = data.subdata(in: idx ..< data.endIndex.advanced(by: -padding))

@@ -89,7 +89,7 @@ class FrameTests: XCTestCase
         
         // un-padded frame is 22 bytes. When we add padding, we get +1 byte for pad length, +1 byte of padding, for 24 bytes total
         let padLength = 1
-        let withPadding: Data = {
+        var withPadding: Data = {
             var r = Data(bytes: [
                 0x00, 0x00, 0x0f,       // 3-byte payload length (15 bytes)
                 0x00,                   // 1-byte type
@@ -117,6 +117,21 @@ class FrameTests: XCTestCase
         
         XCTAssertEqual(noPaddingFrame.data, payload)
         XCTAssertEqual(withPaddingFrame.data, payload)
+        
+        // now test the error conditions
+        // MUST have a stream-id, else throw connection error of PROTOCOL_ERROR
+        withPadding[8] = 0
+        XCTAssertThrowsError(try decodeFrame(from: withPadding), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        withPadding[8] = 1
+        
+        // padding length MUST NOT exceed remaining payload length
+        withPadding[9] = 255
+        XCTAssertThrowsError(try decodeFrame(from: withPadding), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        withPadding[9] = 1
     }
     
     func testHeadersFrameEncoding() {
@@ -176,7 +191,7 @@ class FrameTests: XCTestCase
             data.append(payload)
             return data
         }()
-        let withPriority: Data = {
+        var withPriority: Data = {
             var data = Data(bytes: [
                 0x00, 0x00, 0x16,       // 3-byte payload length (17 bytes headers + 5 bytes priority/weight)
                 0x01,                   // 1-byte type
@@ -205,6 +220,22 @@ class FrameTests: XCTestCase
         XCTAssertEqual(priorityFrame.weight, weight)
         XCTAssertEqual(priorityFrame.isExclusive, true)
         XCTAssertEqual(priorityFrame.data, payload)
+        
+        // HEADERS frames MUST be associated with a stream. If a HEADERS frame is received whose
+        // stream identifier field is 0x0, the recipient MUST respond with a connection error
+        // (Section 5.4.1) of type PROTOCOL_ERROR.
+        withPriority[8] = 0
+        XCTAssertThrowsError(try decodeFrame(from: withPriority), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        withPriority[8] = 1
+        
+        // invalid padding length -- we can cheat here & use the 0x80 byte as the pad-length byte
+        withPriority[4] = 0x2c      // padding, priority, end-headers
+        XCTAssertThrowsError(try decodeFrame(from: withPriority), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        withPriority[4] = 0x24
     }
     
     func testEncodePriorityFrame() {
@@ -229,7 +260,7 @@ class FrameTests: XCTestCase
         let stream = 1
         let dependency = 2
         let weight = 5
-        let data = Data(bytes: [
+        var data = Data(bytes: [
             0x00, 0x00, 0x05,       // 3-byte payload length (5 bytes)
             0x02,                   // 1-byte type
             0x00,                   // 1-byte flags
@@ -245,6 +276,20 @@ class FrameTests: XCTestCase
         XCTAssertEqual(frame.streamDependency, dependency)
         XCTAssertEqual(frame.weight, weight)
         XCTAssertEqual(frame.isExclusive, true)
+        
+        // MUST have a length of 5 bytes
+        data[2] = 4
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+        data[2] = 5
+        
+        // MUST be associated with a stream
+        data[8] = 0
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        data[8] = 1
     }
     
     func testEncodeResetStream() {
@@ -264,7 +309,7 @@ class FrameTests: XCTestCase
     }
     
     func testDecodeResetStream() {
-        let data = Data(bytes: [
+        var data = Data(bytes: [
             0x00, 0x00, 0x04,       // 3-byte payload length (4 bytes)
             0x03,                   // 1-byte type
             0x00,                   // 1-byte flags
@@ -279,6 +324,20 @@ class FrameTests: XCTestCase
         XCTAssertEqual(frame.payloadLength, 4)
         XCTAssertEqual(frame.streamIdentifier, 1)
         XCTAssertEqual(frame.error, ProtocolError.flowControlError)
+        
+        // MUST have a length of 4 bytes
+        data[2] = 3
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+        data[2] = 4
+        
+        // MUST be associated with a stream
+        data[8] = 0
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        data[8] = 1
     }
     
     func testEncodeSettings() {
@@ -344,7 +403,7 @@ class FrameTests: XCTestCase
             .maxHeaderListSize(2048)        // default = unlimited
         ]
         let stream = 0  // SETTINGS frames are connection-wide
-        let data = Data(bytes: [
+        var data = Data(bytes: [
             0x00, 0x00, 0x24,       // 3-byte payload length (6 bytes * 6 settings)
             0x04,                   // 1-byte type
             0x00,                   // 1-byte flags
@@ -363,11 +422,12 @@ class FrameTests: XCTestCase
             0x00, 0x06,             // setting: MAX_HEADER_LIST_SIZE
             0x00, 0x00, 0x08, 0x00, // value: 2048
         ])
-        let ack = Data(bytes: [
+        var ack = Data(bytes: [
             0x00, 0x00, 0x00,       // 3-byte payload length (0 bytes)
             0x04,                   // 1-byte type
             0x01,                   // 1-byte flags (0x01 = ACK)
             0x00, 0x00, 0x00, 0x00, // 4-byte stream identifier
+            0x00, 0x00, 0x00, 0x00, // extra buffer space for when we change the payload length
         ])
         
         guard let frame = decodeSpecificFrame(from: data, ofType: SettingsFrame.self) else {
@@ -385,6 +445,34 @@ class FrameTests: XCTestCase
         XCTAssertEqual(ackFrame.streamIdentifier, stream)
         XCTAssertEqual(ackFrame.payloadLength, 0)
         XCTAssertEqual(ackFrame.settings, [])
+        
+        // non-ACK frame MUST have a length divisible by six
+        data[2] = 35
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+        data[2] = 36
+        
+        // MUST NOT be associated with a stream
+        data[8] = 1
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        data[8] = 0
+        
+        // ACK frame MUST have a zero payload length
+        ack[2] = 6 // divisible by six, so non-ACK code would not throw the same error
+        XCTAssertThrowsError(try decodeFrame(from: ack), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+        ack[2] = 0
+        
+        // MUST NOT be associated with a stream
+        ack[8] = 1
+        XCTAssertThrowsError(try decodeFrame(from: ack), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        ack[8] = 0
     }
     
     func testEncodePushPromise() {
@@ -418,17 +506,17 @@ class FrameTests: XCTestCase
     
     func testDecodePushPromise() {
         let headerData = Data(bytes: [0x82, 0x86, 0x84, 0xbe, 0x58, 0x86, 0xa8, 0xeb, 0x10, 0x64, 0x9c, 0xbf])
-        let stream = 1
-        let promisedStream = 2
-        let data: Data = {
+        let stream = 2
+        let promisedStream = 3
+        var data: Data = {
             var d = Data(bytes: [
                 0x00, 0x00, 0x13,       // 3-byte payload length (19 bytes)
                 0x05,                   // 1-byte type
                 0x0c,                   // 1-byte flags (0x04 = END_HEADERS, 0x08 = PADDED)
-                0x00, 0x00, 0x00, 0x01, // 4-byte stream identifier
+                0x00, 0x00, 0x00, 0x02, // 4-byte stream identifier
                 
                 0x02,                   // padding length
-                0x00, 0x00, 0x00, 0x02, // 4-byte promised stream id
+                0x00, 0x00, 0x00, 0x03, // 4-byte promised stream id
                 ])
             d.append(headerData)
             d.append(contentsOf: repeatElement(UInt8(0), count: 2))
@@ -443,6 +531,45 @@ class FrameTests: XCTestCase
         XCTAssertEqual(frame.streamIdentifier, stream)
         XCTAssertEqual(frame.promisedStreamId, promisedStream)
         XCTAssertEqual(frame.headerData, headerData)
+        
+        // padding MUST NOT exceed remaining length of payload
+        data[9] = 255
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+        data[9] = 2
+        
+        // MUST have a length of at least 4 bytes
+        data[2] = 3
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+        data[2] = 19
+        
+        // MUST be associated with a stream
+        data[8] = 0
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        data[8] = 2
+        
+        // MUST NOT accept a zero promised stream ID
+        data[13] = 0
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        data[13] = 3
+        
+        // MUST NOT accept an earlier/identical stream ID
+        data[13] = 1
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        data[13] = 2
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        data[13] = 3
     }
     
     func testEncodePing() {
@@ -470,7 +597,7 @@ class FrameTests: XCTestCase
     
     func testDecodePing() {
         let ping = Data(bytes: [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
-        let data = Data(bytes: [
+        var data = Data(bytes: [
             0x00, 0x00, 0x08,       // 3-byte payload length (8 bytes)
             0x06,                   // 1-byte type
             0x00,                   // 1-byte flags
@@ -493,6 +620,24 @@ class FrameTests: XCTestCase
         }
         XCTAssertEqual(ackFrame.flags, .ack)
         XCTAssertEqual(ackFrame.payload, ping)
+        
+        // MUST have a payload length of exactly 8 bytes
+        data[2] = 7
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+        data[2] = 9
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+        data[2] = 8
+        
+        // MUST NOT be associated with a stream
+        data[8] = 1
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        data[8] = 0
     }
     
     func testEncodeGoAway() {
@@ -525,7 +670,7 @@ class FrameTests: XCTestCase
         let debugDataString = "This is some debug data, containing multi-byte UTF-8 ćhåräčtęrß" // 69 bytes of UTF-8
         let lastStream = 2
         let error = ProtocolError.inadequateSecurity    // 12 / 0x0c
-        let data: Data = {
+        var data: Data = {
             var d = Data(bytes: [
                 0x00, 0x00, 0x4d,       // 3-byte payload length (77 bytes)
                 0x07,                   // 1-byte type
@@ -534,7 +679,7 @@ class FrameTests: XCTestCase
                 
                 0x00, 0x00, 0x00, 0x02, // 4-byte last-stream-id
                 0x00, 0x00, 0x00, 0x0c, // 4-byte error code (0xc = INADEQUATE_SECURITY)
-                ])
+            ])
             d.append(debugDataString.data(using: .utf8)!)
             return d
         }()
@@ -549,6 +694,22 @@ class FrameTests: XCTestCase
         XCTAssertEqual(frame.error, error)
         XCTAssertNotNil(frame.debugData)
         XCTAssertEqual(debugDataString, String(data: frame.debugData!, encoding: .utf8))
+        
+        // MUST have a payload length of at least 8 bytes
+        data[2] = 7
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+        data[2] = 9
+        XCTAssertNoThrow(try decodeFrame(from: data))
+        data[2] = 8
+        
+        // MUST NOT be associated with a stream
+        data[8] = 1
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        data[8] = 0
     }
     
     func testEncodeWindowUpdate() {
@@ -574,7 +735,7 @@ class FrameTests: XCTestCase
     func testDecodeWindowUpdate() {
         let increment = 256     // 0x100
         let stream = 1
-        let data = Data(bytes: [
+        var data = Data(bytes: [
             0x00, 0x00, 0x04,       // 3-byte payload length (4 bytes)
             0x08,                   // 1-byte type
             0x00,                   // 1-byte flags
@@ -591,6 +752,29 @@ class FrameTests: XCTestCase
         XCTAssertEqual(frame.flags, [])
         XCTAssertEqual(frame.payloadLength, 4)
         XCTAssertEqual(frame.windowSizeIncrement, increment)
+        
+        // MUST have a payload length of exactly 4 bytes
+        data[2] = 3
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+        data[2] = 5
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+        data[2] = 4
+        
+        // MAY or MAY NOT be associated with a stream
+        data[8] = 0
+        XCTAssertNoThrow(try decodeFrame(from: data))
+        data[8] = 1
+        
+        // MUST NOT have a size increment of zero
+        data[11] = 0
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        data[11] = 0x01
     }
     
     func testEncodeContinuation() {
@@ -617,7 +801,7 @@ class FrameTests: XCTestCase
     func testDecodeContinuation() {
         let stream = 1
         let headerData = Data(bytes: [0x40, 0x0a, 0x63, 0x75, 0x73, 0x74, 0x6f, 0x6d, 0x2d, 0x6b, 0x65, 0x79, 0x0c, 0x63, 0x75, 0x73, 0x74, 0x6f, 0x6d, 0x2d, 0x76, 0x61, 0x6c, 0x75, 0x65])
-        let data: Data = {
+        var data: Data = {
             var d = Data(bytes: [
                 0x00, 0x00, 0x19,       // 3-byte payload length (25 bytes)
                 0x09,                   // 1-byte type (0x09 = CONTINUATION)
@@ -636,6 +820,64 @@ class FrameTests: XCTestCase
         XCTAssertEqual(frame.payloadLength, 25)
         XCTAssertEqual(frame.streamIdentifier, stream)
         XCTAssertEqual(frame.headerData, headerData)
+        
+        // MUST be associated with a stream
+        data[8] = 0
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected PROTOCOL_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .protocolError)
+        }
+        data[8] = 1
+    }
+    
+    func testDecodeBadPayloadLength() {
+        let data = Data(bytes: [
+            0x00, 0x00, 0x04,       // 3-byte payload length (4 bytes)
+            0x01,                   // 1-byte type (0x1 = DATA)
+            0x00,                   // 1-byte flags
+            0x00, 0x00, 0x00, 0x01, // 4-byte stream identifier
+            // no payload!
+        ])
+        
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+    }
+    
+    func testDecodeIncompleteHeader() {
+        let data = Data(bytes: [
+            0x00, 0x00, 0x04,       // 3-byte payload length (4 bytes)
+            0x01,                   // 1-byte type
+            0x00,                   // 1-byte flags
+            // missing four bytes!
+        ])
+        
+        XCTAssertThrowsError(try decodeFrame(from: data), "Expected FRAME_SIZE_ERROR") {
+            XCTAssertTrue($0 is ProtocolError && $0 as! ProtocolError == .frameSizeError)
+        }
+    }
+    
+    func testDecodeUnknownFrameType() {
+        let data = Data(bytes: [
+            0x00, 0x00, 0x04,       // 3-byte payload length (4 bytes)
+            0x20,                   // 1-byte type (0x20 is unknown)
+            0x00,                   // 1-byte flags
+            0x00, 0x00, 0x00, 0x01, // 4-byte stream identifier
+            
+            // 'payload'
+            0x00, 0x00, 0x00, 0x00
+        ])
+        
+        do {
+            _ = try decodeFrame(from: data)
+            XCTFail("Expected an error to be thrown when decoding an unknown frame type")
+        }
+        catch let FrameError.unknownType(type, payloadLen) {
+            XCTAssertEqual(type, 0x20)
+            XCTAssertEqual(payloadLen, 4)
+        }
+        catch {
+            XCTFail("Decode encountered unexpected error: \(error)")
+        }
     }
     
     func testFrameFlagSetters() {
@@ -701,6 +943,9 @@ class FrameTests: XCTestCase
         (testDecodeWindowUpdate, "testDecodeWindowUpdate"),
         (testEncodeContinuation, "testEncodeContinuation"),
         (testDecodeContinuation, "testDecodeContinuation"),
+        (testDecodeBadPayloadLength, "testDecodeBadPayloadLength"),
+        (testDecodeIncompleteHeader, "testDecodeIncompleteHeader"),
+        (testDecodeUnknownFrameType, "testDecodeUnknownFrameType")
     ]
 
 }

@@ -39,6 +39,9 @@ public struct GoAwayFrame : Frame
         guard payloadLength >= 8 else {
             throw ProtocolError.frameSizeError
         }
+        guard streamIdentifier == 0 else {
+            throw ProtocolError.protocolError
+        }
         
         var idx = data.startIndex
         self.lastStreamID = Int(readNetworkLong(from: data, at: idx) & ~0x80000000)

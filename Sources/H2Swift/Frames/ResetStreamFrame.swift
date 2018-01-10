@@ -33,7 +33,12 @@ public struct ResetStreamFrame : Frame
     }
     
     public init(payload data: Data, payloadLength: Int, flags: FrameFlags, streamIdentifier: Int) throws {
-        precondition(payloadLength >= 4, "RST_STREAM must have at least 4 bytes of payload data")
+        guard payloadLength == 4 else {
+            throw ProtocolError.frameSizeError
+        }
+        guard streamIdentifier != 0 else {
+            throw ProtocolError.protocolError
+        }
         
         self.streamIdentifier = streamIdentifier
         self.errorCode = readNetworkLong(from: data)

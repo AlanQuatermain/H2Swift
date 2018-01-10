@@ -10,6 +10,7 @@ import Foundation
 public enum FrameError : Error
 {
     case invalidFlags(FrameFlags)
+    case unknownType(UInt8, Int)    // carries type code and payload length
 }
 
 public enum FrameType : UInt8
@@ -235,13 +236,13 @@ func decodeFrameHeader(from data: Data) throws -> (payloadLen: Int, type: FrameT
     
     // three-byte length
     let payloadLen = readFrameLength(from: data)
-    guard payloadLen + 3 <= data.count else {
+    guard payloadLen + 9 <= data.count else {
         throw ProtocolError.frameSizeError
     }
     
     // one-byte type
     guard let type = FrameType(rawValue: data[3]) else {
-        throw ProtocolError.noError
+        throw FrameError.unknownType(data[3], payloadLen)
     }
     
     // one-byte flags

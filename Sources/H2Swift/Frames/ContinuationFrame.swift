@@ -26,6 +26,10 @@ public struct ContinuationFrame : Frame, Flaggable
     }
     
     public init(payload data: Data, payloadLength: Int, flags: FrameFlags, streamIdentifier: Int) throws {
+        guard streamIdentifier != 0 else {
+            throw ProtocolError.protocolError
+        }
+        
         self.flags = flags.intersection(type.allowedFlags)
         self.streamIdentifier = streamIdentifier
         self.headerData = data

@@ -81,6 +81,10 @@ struct HeadersFrame : Frame, Flaggable
     }
     
     init(payload data: Data, payloadLength: Int, flags: FrameFlags, streamIdentifier: Int) throws {
+        guard streamIdentifier != 0 else {
+            throw ProtocolError.protocolError
+        }
+        
         self.flags = flags.intersection(type.allowedFlags)
         self.streamIdentifier = streamIdentifier
         
@@ -88,6 +92,10 @@ struct HeadersFrame : Frame, Flaggable
         if flags.contains(.padded) {
             padding = Int(data[idx])
             idx += 1
+            
+            guard padding < (flags.contains(.priority) ? payloadLength - 6 : payloadLength - 1) else {
+                throw ProtocolError.protocolError
+            }
         }
         
         if flags.contains(.priority) {

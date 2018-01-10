@@ -40,11 +40,18 @@ public struct SettingsFrame : Frame, Flaggable
     }
     
     public init(payload data: Data, payloadLength: Int, flags: FrameFlags, streamIdentifier: Int) throws {
+        guard streamIdentifier == 0 else {
+            throw ProtocolError.protocolError
+        }
         if flags.contains(.ack) {
-            precondition(payloadLength == 0, "SETTINGS acknowledgements should contain no payload.")
+            guard payloadLength == 0 else {
+                throw ProtocolError.frameSizeError
+            }
         }
         else {
-            precondition(payloadLength % 6 == 0, "SETTINGS payload should be a multiple of six bytes in size")
+            guard payloadLength % 6 == 0 else {
+                throw ProtocolError.frameSizeError
+            }
         }
         
         self.flags = flags.intersection(type.allowedFlags)
@@ -52,7 +59,7 @@ public struct SettingsFrame : Frame, Flaggable
         var idx = data.startIndex
         while idx < data.endIndex {
             if data.distance(from: idx, to: data.endIndex) < 6 {
-                throw ProtocolError.frameSizeError
+                throw ProtocolError.frameSizeError  // shouldn't happen, with the check above, but still...
             }
             
             let subdata = data.subdata(in: idx ..< idx.advanced(by: 6))

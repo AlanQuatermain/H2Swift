@@ -8,22 +8,6 @@
 import XCTest
 @testable import H2Swift
 
-func XCTAssertEqualTuple<T1: Equatable, T2: Equatable>(_ expression1: @autoclosure () throws -> (T1, T2), _ expression2: @autoclosure () throws -> (T1, T2), _ message: @autoclosure () -> String = "", file: StaticString = #file, line: UInt = #line) {
-    let ex1: (T1, T2)
-    let ex2: (T1, T2)
-    do {
-        ex1 = try expression1()
-        ex2 = try expression2()
-    }
-    catch {
-        XCTFail("Unexpected exception: \(error) \(message())", file: file, line: line)
-        return
-    }
-    
-    XCTAssertEqual(ex1.0, ex2.0, message(), file: file, line: line)
-    XCTAssertEqual(ex1.1, ex2.1, message(), file: file, line: line)
-}
-
 class HPACKTests: XCTestCase {
     
     private func encodeInteger(_ value: UInt, prefix: Int) -> Data {
@@ -668,8 +652,6 @@ class HPACKTests: XCTestCase {
         encoder.appendNonIndexed(header: h2NoIndex.name, value: h2NoIndex.value)
         encoder.appendNonIndexed(header: h3NeverIndex.name, value: h3NeverIndex.value)
         XCTAssertEqual(encoder.encodedData, request2)
-        print("enc2: \(byteString(from: encoder.encodedData, hex: true))")
-        print("exp2: \(byteString(from: request2, hex: true))")
         XCTAssertEqual(encoder.headerIndexTable.dynamicTableLength, 0)
         
         encoder.reset()

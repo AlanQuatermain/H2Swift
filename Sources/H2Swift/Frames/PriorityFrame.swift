@@ -29,7 +29,12 @@ public struct PriorityFrame : Frame
     }
     
     public init(payload data: Data, payloadLength: Int, flags: FrameFlags, streamIdentifier: Int) throws {
-        precondition(payloadLength >= 5, "PRIORITY frame payload should be (at least) five bytes in size")
+        guard payloadLength == 5 else {
+            throw ProtocolError.frameSizeError
+        }
+        guard streamIdentifier != 0 else {
+            throw ProtocolError.protocolError
+        }
         
         self.streamIdentifier = streamIdentifier
         
