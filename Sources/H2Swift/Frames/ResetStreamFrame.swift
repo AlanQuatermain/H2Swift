@@ -19,6 +19,10 @@ public struct ResetStreamFrame : Frame
     public var streamIdentifier: Int
     public let errorCode: UInt32
     
+    public var error: ProtocolError? {
+        return ProtocolError(rawValue: errorCode)
+    }
+    
     public init(stream: Int, error: ProtocolError) {
         self.init(stream: stream, errorCode: error.rawValue)
     }

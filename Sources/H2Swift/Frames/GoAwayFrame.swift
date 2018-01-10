@@ -21,6 +21,10 @@ public struct GoAwayFrame : Frame
     public let errorCode: UInt32
     public let debugData: Data?
     
+    public var error: ProtocolError? {
+        return ProtocolError(rawValue: errorCode)
+    }
+    
     public init(errorCode: UInt32, lastStreamID: Int, debugData: Data? = nil) {
         self.lastStreamID = lastStreamID
         self.errorCode = errorCode

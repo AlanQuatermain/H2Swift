@@ -147,6 +147,28 @@ public enum SettingsParameters
     }
 }
 
+extension SettingsParameters : Equatable
+{
+    public static func == (lhs: SettingsParameters, rhs: SettingsParameters) -> Bool {
+        switch (lhs, rhs) {
+        case let (.headerTableSize(l), .headerTableSize(r)):
+            return l == r
+        case let (.enablePush(l), .enablePush(r)):
+            return l == r
+        case let (.maxConcurrentStreams(l), .maxConcurrentStreams(r)):
+            return l == r
+        case let (.initialWindowSize(l), .initialWindowSize(r)):
+            return l == r
+        case let (.maxFrameSize(l), .maxFrameSize(r)):
+            return l == r
+        case let (.maxHeaderListSize(l), .maxHeaderListSize(r)):
+            return l == r
+        default:
+            return false
+        }
+    }
+}
+
 public struct FrameFlags : OptionSet
 {
     public typealias RawValue = UInt8

@@ -76,7 +76,8 @@ public struct PushPromiseFrame : Frame, Flaggable
         }
         
         // add a padding length byte and round up to nearest multiple of four
-        return (unpaddedLen + 1 + 4) & ~0b11
+        let lenWithPadByte = unpaddedLen + 1
+        return ((lenWithPadByte + 4) & ~0b11) - lenWithPadByte
     }
     
     public mutating func setSuggestedPadding() {
