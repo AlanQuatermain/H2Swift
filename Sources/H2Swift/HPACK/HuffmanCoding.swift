@@ -24,6 +24,8 @@ public class HuffmanEncoder
         return offset + (remainingBits == 0 || remainingBits == 8 ? 0 : 1)
     }
     
+    public init() {}
+    
     public func reset() {
         buffer.removeAll(keepingCapacity: true)
         buffer.append(contentsOf: repeatElement(UInt8(0), count: HuffmanEncoder.initialBufferCount))
@@ -174,6 +176,8 @@ public class HuffmanDecoder
 {
     private var acceptable = false
     private var state = 0
+    
+    public init() {}
     
     public func decodeString(from data: Data) throws -> String {
         return try data.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) -> String in
