@@ -7,7 +7,7 @@
 
 import Foundation
 
-class HuffmanEncoder
+public class HuffmanEncoder
 {
     private static let initialBufferCount = 256
     
@@ -15,16 +15,16 @@ class HuffmanEncoder
     private var offset = 0
     private var remainingBits = 8
     
-    var data: Data {
+    public var data: Data {
         buffer.count = self.count
         return buffer
     }
     
-    var count: Int {
+    public var count: Int {
         return offset + (remainingBits == 0 || remainingBits == 8 ? 0 : 1)
     }
     
-    func reset() {
+    public func reset() {
         buffer.removeAll(keepingCapacity: true)
         buffer.append(contentsOf: repeatElement(UInt8(0), count: HuffmanEncoder.initialBufferCount))
         offset = 0
@@ -39,7 +39,7 @@ class HuffmanEncoder
         return (clen + 7) & ~7
     }
     
-    func encode(_ string: String) -> Int {
+    public func encode(_ string: String) -> Int {
         let clen = encodedLength(of: string)
         ensureBitsAvailable(clen)
         let startCount = self.count
@@ -164,18 +164,18 @@ class HuffmanEncoder
     }
 }
 
-enum HuffmanDecoderError : Error
+public enum HuffmanDecoderError : Error
 {
     case invalidState
     case decodeFailed
 }
 
-class HuffmanDecoder
+public class HuffmanDecoder
 {
     private var acceptable = false
     private var state = 0
     
-    func decodeString(from data: Data) throws -> String {
+    public func decodeString(from data: Data) throws -> String {
         return try data.withUnsafeBytes { (ptr: UnsafePointer<UInt8>) -> String in
             try decodeString(from: ptr, count: data.count)
         }
@@ -183,7 +183,7 @@ class HuffmanDecoder
     
     // Per the nghttp2 implementation, this uses the decoding algorithm & tables described at
     // http://graphics.ics.uci.edu/pub/Prefix.pdf (which is apparently no longer available, sigh).
-    func decodeString(from bytes: UnsafeRawPointer, count: Int) throws -> String {
+    public func decodeString(from bytes: UnsafeRawPointer, count: Int) throws -> String {
         var decoded = [UInt8]()
         decoded.reserveCapacity(256)
         
@@ -220,7 +220,7 @@ class HuffmanDecoder
         return result
     }
     
-    func reset() {
+    public func reset() {
         state = 0
         acceptable = false
     }
